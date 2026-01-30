@@ -58,7 +58,7 @@ func (m *MenuBar) onReady() {
 	}
 
 	// Create menu items
-	mTitle := systray.AddMenuItem("Simple Healthchecker", "")
+	mTitle := systray.AddMenuItem("POKE 443 - Infra Monitor", "")
 	mTitle.Disable()
 	systray.AddSeparator()
 	mOpen := systray.AddMenuItem("Open Web Console", "Open the web interface in browser")

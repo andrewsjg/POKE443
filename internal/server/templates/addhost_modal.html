@@ -1,0 +1,93 @@
+{{ define "addhost_modal.html" }}
+<div class="modal-overlay" hx-get="/close-modal" hx-target="#modal" hx-swap="innerHTML" hx-trigger="click[target==this]">
+  <div class="modal-container" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h2 class="modal-title">Add New Host</h2>
+      <button class="modal-close" hx-get="/close-modal" hx-target="#modal" hx-swap="innerHTML">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <form id="addhost-form" hx-post="/addhost" hx-target="#modal" hx-swap="innerHTML" hx-include="#addhost-form">
+        <div class="form-group">
+          <label class="form-label">Host Name</label>
+          <input class="form-input" name="name" placeholder="e.g. Production Server" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Address / Hostname</label>
+          <input class="form-input" name="address" placeholder="e.g. 192.168.1.1 or server.local" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Healthchecks.io URL (optional)</label>
+          <input class="form-input" name="hcurl" placeholder="https://hc-ping.com/<uuid>">
+        </div>
+
+        <div class="form-section-title">Health Checks</div>
+        <div id="added-checks" class="checks-list" style="display: none;"></div>
+        
+        <div class="add-check-row" style="margin-top: 12px;">
+          <div class="form-group" style="flex: 0 0 100px;">
+            <label class="form-label">Type</label>
+            <select class="form-input form-select" name="type" hx-get="/check-config" hx-target="#add-check-config" hx-swap="innerHTML">
+              <option value="ping">Ping</option>
+              <option value="http">HTTP</option>
+              <option value="tcp">TCP</option>
+            </select>
+          </div>
+          <div id="add-check-config" style="display: contents;"></div>
+          <div class="form-group" style="flex: 0 0 90px;">
+            <label class="form-label">ID</label>
+            <input class="form-input" name="id" placeholder="optional" title="Unique ID for dependency references" style="font-size: 12px;">
+          </div>
+          <div class="form-group" style="flex: 0 0 105px;">
+            <label class="form-label">Depends On</label>
+            <input class="form-input" name="depends_on" placeholder="Parent ID" title="ID of parent check" style="font-size: 12px;">
+          </div>
+          <div class="form-group" style="flex: 0 0 60px;">
+            <label class="form-label">MQTT</label>
+            <div style="display: flex; align-items: center; height: 38px;">
+              <input type="checkbox" name="mqtt_notify" value="true" title="Send MQTT notification on state change" style="width: 18px; height: 18px;">
+            </div>
+          </div>
+          <div class="form-group" style="flex: 0 0 auto; align-self: flex-end;">
+            <button type="button" class="btn btn-secondary btn-sm" hx-post="/addhost-check-row" hx-include="#addhost-form" hx-target="#added-checks" hx-swap="beforeend">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              Add
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <div class="modal-footer-left">
+        <button class="btn btn-secondary" hx-get="/close-modal" hx-target="#modal" hx-swap="innerHTML">Cancel</button>
+      </div>
+      <button class="btn btn-primary" hx-post="/addhost" hx-include="#addhost-form" hx-target="#modal" hx-swap="innerHTML">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+          <polyline points="17 21 17 13 7 13 7 21"></polyline>
+          <polyline points="7 3 7 8 15 8"></polyline>
+        </svg>
+        Save Host
+      </button>
+    </div>
+  </div>
+</div>
+<script>
+  // Show checks list container when items are added
+  document.body.addEventListener('htmx:afterSwap', function(evt) {
+    if (evt.detail.target.id === 'added-checks') {
+      const container = document.getElementById('added-checks');
+      if (container && container.children.length > 0) {
+        container.style.display = 'block';
+      }
+    }
+  });
+</script>
+{{ end }}

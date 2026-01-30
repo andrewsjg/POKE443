@@ -1,0 +1,46 @@
+hosts:
+  # Define a gateway/internet connectivity check first
+  - name: "Internet Gateway"
+    address: "8.8.8.8"
+    checks:
+      - type: ping
+        enabled: true
+        id: "internet"  # Unique ID that other checks can depend on
+
+  - name: "router"
+    address: "192.168.1.1"
+    checks:
+      - type: ping
+        enabled: true
+        mqtt_notify: true  # Send MQTT notification when state changes
+    # Optional: Healthchecks.io ping URL (https://hc-ping.com/<uuid>)
+    # On success we GET <url>, on failure we GET <url>/fail
+    healthchecks_ping_url: "https://hc-ping.com/00000000-0000-0000-0000-000000000000"
+
+  - name: "example"
+    address: "example.com"
+    checks:
+      - type: ping
+        enabled: true
+        depends_on: "internet"  # If internet check is down, this won't alert
+      - type: http
+        url: "https://example.com/"
+        expect: 200
+        enabled: true
+        depends_on: "internet"  # If internet check is down, this won't alert
+        mqtt_notify: true  # Send MQTT notification when state changes
+      - type: tcp
+        port: 443  # Check if HTTPS port is open
+        enabled: true
+        depends_on: "internet"
+
+# MQTT Settings (optional)
+# Configure MQTT broker to receive notifications on state changes
+settings:
+  mqtt:
+    enabled: false
+    broker: "tcp://localhost:1883"
+    client_id: "simple-healthchecker"
+    username: ""
+    password: ""
+    topic: "healthchecker"  # Messages published to: <topic>/state-change

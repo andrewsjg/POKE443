@@ -1,0 +1,6 @@
+{{ define "stats.html" }}
+{{ donutChart .Stats }}
+<div style="margin-top: 8px; font-size: 12px; color: var(--color-text-muted);">
+  {{ .Stats.ChecksUp }} up · {{ .Stats.ChecksDown }} down{{ if gt .Stats.ChecksParentFailed 0 }} · {{ .Stats.ChecksParentFailed }} blocked{{ end }} · {{ .Stats.ChecksDisabled }} disabled
+</div>
+{{ end }}

@@ -1,0 +1,575 @@
+{{ define "analytics.html" }}
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Analytics - POKE 443</title>
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --sidebar-width: 240px;
+      --color-bg: #0f172a;
+      --color-sidebar: #1e293b;
+      --color-card: #1e293b;
+      --color-card-hover: #334155;
+      --color-border: #334155;
+      --color-text: #f1f5f9;
+      --color-text-muted: #94a3b8;
+      --color-primary: #3b82f6;
+      --color-primary-hover: #2563eb;
+      --color-success: #22c55e;
+      --color-success-bg: rgba(34, 197, 94, 0.15);
+      --color-danger: #ef4444;
+      --color-danger-bg: rgba(239, 68, 68, 0.15);
+      --color-warning: #f59e0b;
+      --color-warning-bg: rgba(245, 158, 11, 0.15);
+      --radius: 12px;
+      --radius-sm: 8px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--color-bg);
+      color: var(--color-text);
+      min-height: 100vh;
+    }
+
+    .app-layout { display: flex; min-height: 100vh; }
+
+    /* Sidebar */
+    .sidebar {
+      width: var(--sidebar-width);
+      background: var(--color-sidebar);
+      border-right: 1px solid var(--color-border);
+      padding: 24px 16px;
+      display: flex;
+      flex-direction: column;
+      position: fixed;
+      top: 0; left: 0;
+      height: 100vh;
+      z-index: 100;
+    }
+
+    .sidebar-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 8px 24px;
+      border-bottom: 1px solid var(--color-border);
+      margin-bottom: 24px;
+    }
+
+    .sidebar-brand-icon {
+      width: 40px; height: 40px;
+      background: linear-gradient(135deg, var(--color-primary), #8b5cf6);
+      border-radius: var(--radius-sm);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+    }
+
+    .sidebar-brand-text { font-weight: 700; font-size: 16px; line-height: 1.2; }
+    .sidebar-brand-text span { display: block; font-weight: 400; font-size: 12px; color: var(--color-text-muted); }
+
+    .sidebar-section { margin-bottom: 24px; }
+    .sidebar-section-title {
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--color-text-muted);
+      padding: 0 8px; margin-bottom: 12px;
+    }
+
+    .sidebar-link {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 16px;
+      border-radius: var(--radius-sm);
+      color: var(--color-text-muted);
+      text-decoration: none;
+      font-size: 14px; font-weight: 500;
+      transition: all 0.15s ease;
+    }
+    .sidebar-link:hover { background: var(--color-card-hover); color: var(--color-text); }
+    .sidebar-link.active { background: var(--color-primary); color: white; }
+    .sidebar-link svg { width: 18px; height: 18px; }
+
+    /* Main content */
+    .main-content {
+      flex: 1;
+      margin-left: var(--sidebar-width);
+      padding: 32px;
+    }
+
+    .main-header { margin-bottom: 32px; }
+    .main-title { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+    .main-subtitle { color: var(--color-text-muted); font-size: 14px; }
+
+    /* Stats Cards */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+
+    .stat-card {
+      background: var(--color-card);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+
+    .stat-card-label { font-size: 12px; color: var(--color-text-muted); margin-bottom: 8px; }
+    .stat-card-value { font-size: 32px; font-weight: 700; }
+    .stat-card-value.success { color: var(--color-success); }
+    .stat-card-value.danger { color: var(--color-danger); }
+    .stat-card-value.warning { color: var(--color-warning); }
+
+    /* Host Analytics Section */
+    .host-section {
+      background: var(--color-card);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius);
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+
+    .host-section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--color-border);
+      cursor: pointer;
+    }
+
+    .host-section-header:hover { background: var(--color-card-hover); }
+
+    .host-section-title {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .host-section-name { font-size: 18px; font-weight: 600; }
+    .host-section-address { font-size: 13px; color: var(--color-text-muted); }
+
+    .host-section-stats {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+
+    .host-stat {
+      text-align: right;
+    }
+
+    .host-stat-value { font-size: 20px; font-weight: 600; }
+    .host-stat-label { font-size: 11px; color: var(--color-text-muted); }
+
+    .health-score {
+      width: 48px; height: 48px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; font-weight: 700;
+      border: 3px solid currentColor;
+    }
+
+    .host-section-body { padding: 16px; }
+
+    /* Smokeping Chart Container */
+    .smokeping-container {
+      background: var(--color-bg);
+      border-radius: var(--radius-sm);
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+
+    .smokeping-container h4 {
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: var(--color-text-muted);
+    }
+
+    .smokeping-chart {
+      width: 100%;
+      height: auto;
+    }
+
+    /* Check Details Table */
+    .check-details-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .check-details-table th,
+    .check-details-table td {
+      padding: 12px 16px;
+      text-align: left;
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    .check-details-table th {
+      font-weight: 500;
+      color: var(--color-text-muted);
+      font-size: 11px;
+      text-transform: uppercase;
+    }
+
+    .check-details-table tr:last-child td { border-bottom: none; }
+
+    .check-type-badge {
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .check-type-ping { background: rgba(139, 92, 246, 0.15); color: #a78bfa; }
+    .check-type-http { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+
+    /* Events Timeline */
+    .events-section {
+      background: var(--color-card);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+
+    .events-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 20px;
+    }
+
+    .events-list { list-style: none; }
+
+    .event-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    .event-item:last-child { border-bottom: none; }
+
+    .event-icon {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+
+    .event-icon.down { background: var(--color-danger-bg); color: var(--color-danger); }
+    .event-icon.recovered { background: var(--color-success-bg); color: var(--color-success); }
+
+    .event-content { flex: 1; }
+    .event-title { font-size: 14px; font-weight: 500; margin-bottom: 4px; }
+    .event-meta { font-size: 12px; color: var(--color-text-muted); }
+
+    .event-time {
+      font-size: 12px;
+      color: var(--color-text-muted);
+      white-space: nowrap;
+    }
+
+    /* Availability Table */
+    .availability-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .availability-table th,
+    .availability-table td {
+      padding: 16px;
+      text-align: left;
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    .availability-table th {
+      font-weight: 500;
+      color: var(--color-text-muted);
+      font-size: 12px;
+      text-transform: uppercase;
+    }
+
+    .uptime-cell {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .uptime-bar-container {
+      flex: 1;
+      max-width: 100px;
+    }
+
+    /* Heatmap */
+    .heatmap-container {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+
+    .heatmap-container:last-child {
+      margin-bottom: 0;
+    }
+
+    .heatmap-label {
+      font-size: 10px;
+      color: var(--color-text-muted);
+      min-width: 35px;
+    }
+
+    @media (max-width: 768px) {
+      .sidebar { width: 100%; height: auto; position: relative; border-right: none; border-bottom: 1px solid var(--color-border); }
+      .app-layout { flex-direction: column; }
+      .main-content { margin-left: 0; padding: 20px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="sidebar-brand-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 12h4l3-9 4 18 3-9h4"/>
+          </svg>
+        </div>
+        <div class="sidebar-brand-text">
+          POKE 443
+          <span>Analytics</span>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">Navigation</div>
+        <a href="/" class="sidebar-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+          </svg>
+          Dashboard
+        </a>
+        <a href="/analytics" class="sidebar-link active">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="20" x2="18" y2="10"></line>
+            <line x1="12" y1="20" x2="12" y2="4"></line>
+            <line x1="6" y1="20" x2="6" y2="14"></line>
+          </svg>
+          Analytics
+        </a>
+      </div>
+
+      <div class="sidebar-section" style="margin-top: auto;">
+        <div class="sidebar-section-title">Legend</div>
+        <div style="padding: 0 8px; font-size: 12px; color: var(--color-text-muted);">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+            <div style="width: 12px; height: 12px; background: rgba(59, 130, 246, 0.6); border-radius: 2px;"></div>
+            <span>Min - Median</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+            <div style="width: 12px; height: 12px; background: rgba(59, 130, 246, 0.4); border-radius: 2px;"></div>
+            <span>Median - P75</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+            <div style="width: 12px; height: 12px; background: rgba(59, 130, 246, 0.2); border-radius: 2px;"></div>
+            <span>P75 - P95</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="width: 12px; height: 12px; background: #ef4444; border-radius: 50%;"></div>
+            <span>Packet Loss</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="main-header">
+        <h1 class="main-title">Analytics</h1>
+        <p class="main-subtitle">Detailed performance metrics and historical data</p>
+      </div>
+
+      <!-- Stats Overview -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-card-label">Total Hosts</div>
+          <div class="stat-card-value">{{ .Stats.TotalHosts }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-label">Total Checks</div>
+          <div class="stat-card-value">{{ .Stats.TotalChecks }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-label">Checks Up</div>
+          <div class="stat-card-value success">{{ .Stats.ChecksUp }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-label">Checks Down</div>
+          <div class="stat-card-value danger">{{ .Stats.ChecksDown }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-label">Overall Uptime</div>
+          <div class="stat-card-value success">{{ formatUptime .Stats.OverallUptime }}</div>
+        </div>
+      </div>
+
+      <!-- Recent Events -->
+      {{ if .Events }}
+      <div class="events-section">
+        <h2 class="events-title">Recent Events</h2>
+        <ul class="events-list">
+          {{ range .Events }}
+          <li class="event-item">
+            <div class="event-icon {{ .EventType }}">
+              {{ if eq .EventType "down" }}↓{{ else }}↑{{ end }}
+            </div>
+            <div class="event-content">
+              <div class="event-title">{{ .HostName }} - {{ .CheckType }} check {{ .EventType }}</div>
+              <div class="event-meta">{{ .Message }}</div>
+            </div>
+            <div class="event-time">{{ .Timestamp.Format "Jan 02 15:04:05" }}</div>
+          </li>
+          {{ end }}
+        </ul>
+      </div>
+      {{ end }}
+
+      <!-- Availability Table -->
+      <div class="events-section">
+        <h2 class="events-title">Availability Overview</h2>
+        <table class="availability-table">
+          <thead>
+            <tr>
+              <th>Host</th>
+              <th>Health Score</th>
+              <th>Uptime</th>
+              <th>Checks</th>
+              <th>Recent Activity</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{ range .Hosts }}
+            <tr>
+              <td>
+                <div style="font-weight: 500;">{{ .Name }}</div>
+                <div style="font-size: 12px; color: var(--color-text-muted);">{{ .Address }}</div>
+              </td>
+              <td>
+                <div class="health-score" style="color: {{ healthColorWithBlocked .HealthScore .HasBlockedChecks }};">{{ .HealthScore }}</div>
+              </td>
+              <td>
+                <div class="uptime-cell">
+                  {{ uptimeBar .OverallUptime }}
+                  <span>{{ formatUptime .OverallUptime }}</span>
+                </div>
+              </td>
+              <td>{{ len .Checks }}</td>
+              <td>
+                {{ range .Checks }}
+                  {{ if .HeatmapData }}
+                  <div class="heatmap-container">
+                    <span class="heatmap-label">{{ .Type }}:</span>
+                    {{ heatmap .HeatmapData }}
+                  </div>
+                  {{ end }}
+                {{ end }}
+              </td>
+            </tr>
+            {{ end }}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Host Details with Smokeping Charts -->
+      {{ range .Hosts }}
+      <div class="host-section">
+        <div class="host-section-header">
+          <div class="host-section-title">
+            <div>
+              <div class="host-section-name">{{ .Name }}</div>
+              <div class="host-section-address">{{ .Address }}</div>
+            </div>
+          </div>
+          <div class="host-section-stats">
+            <div class="host-stat">
+              <div class="host-stat-value" style="color: {{ healthColorWithBlocked .HealthScore .HasBlockedChecks }};">{{ formatUptime .OverallUptime }}</div>
+              <div class="host-stat-label">Uptime</div>
+            </div>
+            <div class="health-score" style="color: {{ healthColorWithBlocked .HealthScore .HasBlockedChecks }};">{{ .HealthScore }}</div>
+          </div>
+        </div>
+        <div class="host-section-body">
+          {{ range .Checks }}
+          <div class="smokeping-container">
+            <h4>
+              {{ if eq .Type "http" }}HTTP: {{ .URL }}{{ else }}PING{{ end }}
+              <span style="float: right; font-weight: 400;">
+                Avg: {{ printf "%.1f" .AvgLatency }}ms · 
+                Min: {{ .MinLatency }}ms · 
+                Max: {{ .MaxLatency }}ms · 
+                P95: {{ .P95Latency }}ms
+              </span>
+            </h4>
+            {{ smokepingChart .History 700 100 }}
+          </div>
+          {{ end }}
+
+          <table class="check-details-table">
+            <thead>
+              <tr>
+                <th>Check Type</th>
+                <th>Status</th>
+                <th>Uptime</th>
+                <th>Total Checks</th>
+                <th>Failed</th>
+                <th>Current Latency</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{ range .Checks }}
+              <tr>
+                <td>
+                  {{ if eq .Type "http" }}
+                  <span class="check-type-badge check-type-http">HTTP</span>
+                  {{ else }}
+                  <span class="check-type-badge check-type-ping">PING</span>
+                  {{ end }}
+                </td>
+                <td>
+                  {{ if .OK }}
+                  <span style="color: var(--color-success);">● Up</span>
+                  {{ else if .ParentFailed }}
+                  <span style="color: #f97316;">● Blocked</span>
+                  {{ else }}
+                  <span style="color: var(--color-danger);">● Down</span>
+                  {{ end }}
+                </td>
+                <td>{{ formatUptime .Uptime }}</td>
+                <td>{{ .TotalChecks }}</td>
+                <td style="color: {{ if gt .FailedChecks 0 }}var(--color-danger){{ else }}var(--color-text-muted){{ end }};">{{ .FailedChecks }}</td>
+                <td>{{ .LatencyMS }}ms</td>
+              </tr>
+              {{ end }}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {{ end }}
+    </main>
+  </div>
+</body>
+</html>
+{{ end }}

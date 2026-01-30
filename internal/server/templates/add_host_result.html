@@ -1,0 +1,6 @@
+{{ define "add_host_result.html" }}
+<div id="hosts" hx-swap-oob="true" hx-get="/hosts" hx-trigger="load, every 5s" hx-swap="innerHTML">
+  {{ template "hosts.html" . }}
+</div>
+<div id="modal" hx-swap-oob="true"></div>
+{{ end }}

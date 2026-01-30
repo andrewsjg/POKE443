@@ -1,0 +1,36 @@
+{{ define "addhttp_modal.html" }}
+<div class="modal is-active">
+  <div class="modal-background" hx-get="/close-modal" hx-target="#modal" hx-swap="innerHTML"></div>
+  <div class="modal-card">
+    <header class="modal-card-head">
+      <p class="modal-card-title">Add HTTP Check</p>
+      <button class="delete" aria-label="close" hx-get="/close-modal" hx-target="#modal" hx-swap="innerHTML"></button>
+    </header>
+    <section class="modal-card-body">
+      <form id="addhttp-form">
+        <input type="hidden" name="host" value="{{ .Host }}">
+        <div class="field">
+          <label class="label">URL</label>
+          <div class="control"><input class="input" name="url" placeholder="https://example.com/health" required></div>
+        </div>
+        <div class="field">
+          <label class="label">Expected status</label>
+          <div class="control"><input class="input" name="expect" type="number" value="200" min="100" max="599"></div>
+        </div>
+        <div class="field">
+          <label class="label">ID (optional)</label>
+          <div class="control"><input class="input" name="id" placeholder="e.g. my-api-health" title="Unique ID for dependency references"></div>
+        </div>
+        <div class="field">
+          <label class="label">Depends On (optional)</label>
+          <div class="control"><input class="input" name="depends_on" placeholder="Parent check ID" title="ID of parent check"></div>
+        </div>
+      </form>
+    </section>
+    <footer class="modal-card-foot">
+      <button class="button" hx-get="/close-modal" hx-target="#modal" hx-swap="innerHTML">Cancel</button>
+      <button class="button is-primary" hx-post="/addhttp" hx-include="#addhttp-form" hx-target="#modal" hx-swap="innerHTML">Save</button>
+    </footer>
+  </div>
+</div>
+{{ end }}

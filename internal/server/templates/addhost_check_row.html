@@ -1,0 +1,32 @@
+{{ define "addhost_check_row.html" }}
+<div class="check-row">
+  <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
+    {{ if eq .Type "http" }}
+    <span class="check-type-badge check-type-http">HTTP</span>
+    <span style="font-size: 13px; color: var(--color-text);">{{ .URL }}</span>
+    {{ else if eq .Type "tcp" }}
+    <span class="check-type-badge check-type-tcp">TCP</span>
+    <span style="font-size: 13px; color: var(--color-text);">Port {{ .Port }}</span>
+    {{ else }}
+    <span class="check-type-badge check-type-ping">PING</span>
+    <span style="font-size: 13px; color: var(--color-text-muted);">ICMP Ping</span>
+    {{ end }}
+    {{ if .ID }}<span style="font-size: 11px; color: var(--color-text-muted); background: var(--color-bg-tertiary); padding: 2px 6px; border-radius: 4px;">id:{{ .ID }}</span>{{ end }}
+    {{ if .DependsOn }}<span style="font-size: 11px; color: #f97316; background: rgba(249,115,22,0.1); padding: 2px 6px; border-radius: 4px;">→{{ .DependsOn }}</span>{{ end }}
+    {{ if .MQTTNotify }}<span style="font-size: 11px; color: #3b82f6; background: rgba(59,130,246,0.1); padding: 2px 6px; border-radius: 4px;" title="MQTT notifications enabled">📡</span>{{ end }}
+  </div>
+  <button type="button" class="btn btn-danger btn-sm" hx-on="click: this.closest('.check-row').remove()">
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="18" y1="6" x2="6" y2="18"></line>
+      <line x1="6" y1="6" x2="18" y2="18"></line>
+    </svg>
+  </button>
+  <input type="hidden" name="checks_type" value="{{ .Type }}">
+  <input type="hidden" name="checks_url" value="{{ .URL }}">
+  <input type="hidden" name="checks_expect" value="{{ .Expect }}">
+  <input type="hidden" name="checks_port" value="{{ .Port }}">
+  <input type="hidden" name="checks_id" value="{{ .ID }}">
+  <input type="hidden" name="checks_depends_on" value="{{ .DependsOn }}">
+  <input type="hidden" name="checks_mqtt_notify" value="{{ .MQTTNotify }}">
+</div>
+{{ end }}

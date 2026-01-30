@@ -1,0 +1,14 @@
+{{ define "stats_compact.html" }}
+<div class="sidebar-stats-row">
+  <span class="sidebar-stats-label">Total Hosts</span>
+  <span class="sidebar-stats-value">{{ .Stats.TotalHosts }}</span>
+</div>
+<div class="sidebar-stats-row">
+  <span class="sidebar-stats-label">Total Checks</span>
+  <span class="sidebar-stats-value">{{ .Stats.TotalChecks }}</span>
+</div>
+<div class="sidebar-stats-row">
+  <span class="sidebar-stats-label">Overall Uptime</span>
+  <span class="sidebar-stats-value {{ if lt .Stats.OverallUptime 99.0 }}down{{ else }}up{{ end }}">{{ formatUptime .Stats.OverallUptime }}</span>
+</div>
+{{ end }}

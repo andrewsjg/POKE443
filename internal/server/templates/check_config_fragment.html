@@ -1,0 +1,17 @@
+{{ define "check_config_fragment.html" }}
+{{ if eq .Type "http" }}
+  <div class="form-group" style="flex: 1;">
+    <label class="form-label">URL</label>
+    <input class="form-input" name="url" placeholder="https://example.com/health" required>
+  </div>
+  <div class="form-group" style="flex: 0 0 80px;">
+    <label class="form-label">Status</label>
+    <input class="form-input" name="expect" type="number" value="200" min="100" max="599" title="Expected status code">
+  </div>
+{{ else if eq .Type "tcp" }}
+  <div class="form-group" style="flex: 0 0 100px;">
+    <label class="form-label">Port</label>
+    <input class="form-input" name="port" type="number" placeholder="80" min="1" max="65535" required title="TCP port to check">
+  </div>
+{{ end }}
+{{ end }}

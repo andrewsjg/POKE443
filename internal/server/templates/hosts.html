@@ -1,0 +1,95 @@
+{{ define "hosts.html" }}
+{{ if not .Hosts }}
+<div class="empty-state">
+  <svg class="empty-state-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+    <line x1="8" y1="21" x2="16" y2="21"></line>
+    <line x1="12" y1="17" x2="12" y2="21"></line>
+  </svg>
+  <h3 class="empty-state-title">No hosts configured</h3>
+  <p>Add your first host to start monitoring</p>
+</div>
+{{ else }}
+<div class="hosts-grid">
+  {{ range .Hosts }}
+  {{ $host := .Name }}
+  {{ $addr := .Address }}
+  <div class="host-card">
+    <div class="host-card-header">
+      <div>
+        <div class="host-card-title">{{ $host }}</div>
+        <div class="host-card-address">{{ $addr }}</div>
+      </div>
+      <div class="host-card-actions">
+        <button class="btn-icon" title="Edit Host" hx-get="/edithost-form" hx-vals='{"host":"{{ $host }}"}' hx-target="#modal" hx-swap="innerHTML">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div class="host-card-body">
+      {{ range $i, $c := .Checks }}
+      <div class="check-item">
+        <div class="check-info">
+          {{ if eq $c.Type "http" }}
+          <span class="check-type-badge check-type-http">HTTP</span>
+          {{ else if eq $c.Type "tcp" }}
+          <span class="check-type-badge check-type-tcp">TCP</span>
+          {{ else }}
+          <span class="check-type-badge check-type-ping">PING</span>
+          {{ end }}
+          <div class="check-details">
+            <div class="check-name">{{ if eq $c.Type "http" }}{{ $c.URL }}{{ else if eq $c.Type "tcp" }}Port {{ $c.Port }}{{ else }}ICMP Ping{{ end }}</div>
+            <div class="check-meta">
+              {{ if $c.CheckedAt.IsZero }}Never checked{{ else }}Last: {{ $c.CheckedAt.Format "15:04:05" }}{{ end }}
+            </div>
+          </div>
+        </div>
+        <div class="check-sparkline">
+          {{ sparkline $c.LatencyHistory $c.OK }}
+        </div>
+        <div class="check-status">
+          {{ if $c.Enabled }}
+            {{ if $c.CheckedAt.IsZero }}
+              <span class="status-badge status-unknown">
+                <span class="status-dot"></span>
+                Pending
+              </span>
+            {{ else }}
+              {{ if $c.OK }}
+              <span class="status-badge status-up">
+                <span class="status-dot"></span>
+                Up
+              </span>
+              <span class="check-latency">{{ $c.LatencyMS }}ms</span>
+              {{ else if $c.ParentFailed }}
+              <span class="status-badge status-blocked" title="Parent check '{{ $c.ParentID }}' is down">
+                <span class="status-dot"></span>
+                Blocked
+              </span>
+              {{ else }}
+              <span class="status-badge status-down">
+                <span class="status-dot"></span>
+                Down
+              </span>
+              {{ end }}
+            {{ end }}
+            <button class="check-toggle disable" hx-post="/toggle" hx-vals='{"host":"{{ $host }}","idx":"{{ $i }}","enabled":"false"}' hx-target="this" hx-swap="outerHTML">Disable</button>
+          {{ else }}
+            <span class="status-badge status-disabled">
+              <span class="status-dot"></span>
+              Disabled
+            </span>
+            <button class="check-toggle enable" hx-post="/toggle" hx-vals='{"host":"{{ $host }}","idx":"{{ $i }}","enabled":"true"}' hx-target="this" hx-swap="outerHTML">Enable</button>
+          {{ end }}
+        </div>
+      </div>
+      {{ end }}
+    </div>
+  </div>
+  {{ end }}
+</div>
+{{ end }}
+{{ end }}

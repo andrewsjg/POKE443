@@ -1,0 +1,367 @@
+{{ define "settings.html" }}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings - Health Checker</title>
+  <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+  <style>
+    :root {
+      --sidebar-width: 240px;
+      --color-bg: #0f172a;
+      --color-sidebar: #1e293b;
+      --color-card: #1e293b;
+      --color-card-hover: #334155;
+      --color-border: #334155;
+      --color-text: #f1f5f9;
+      --color-text-muted: #94a3b8;
+      --color-primary: #3b82f6;
+      --color-primary-hover: #2563eb;
+      --color-success: #22c55e;
+      --color-success-bg: rgba(34, 197, 94, 0.15);
+      --color-danger: #ef4444;
+      --color-danger-bg: rgba(239, 68, 68, 0.15);
+      --color-warning: #f59e0b;
+      --color-warning-bg: rgba(245, 158, 11, 0.15);
+      --radius: 12px;
+      --radius-sm: 8px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--color-bg);
+      color: var(--color-text);
+      min-height: 100vh;
+    }
+    .app-layout { display: flex; min-height: 100vh; }
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: var(--sidebar-width);
+      height: 100vh;
+      background: var(--color-sidebar);
+      border-right: 1px solid var(--color-border);
+      display: flex;
+      flex-direction: column;
+      padding: 24px 16px;
+      overflow-y: auto;
+    }
+    .sidebar-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding-bottom: 24px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid var(--color-border);
+    }
+    .sidebar-brand-icon {
+      width: 32px;
+      height: 32px;
+      color: var(--color-primary);
+    }
+    .sidebar-brand-text {
+      font-size: 18px;
+      font-weight: 600;
+    }
+    .sidebar-btn {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      width: 100%;
+    }
+    .sidebar-btn svg { width: 18px; height: 18px; flex-shrink: 0; }
+    .sidebar-btn-secondary {
+      background: transparent;
+      color: var(--color-text-muted);
+      border: 1px solid var(--color-border);
+    }
+    .sidebar-btn-secondary:hover {
+      background: var(--color-card-hover);
+      color: var(--color-text);
+    }
+    .main-content {
+      flex: 1;
+      margin-left: var(--sidebar-width);
+      padding: 32px;
+    }
+    .main-header { margin-bottom: 32px; }
+    .main-title { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+    .main-subtitle { color: var(--color-text-muted); font-size: 14px; }
+    .settings-card {
+      background: var(--color-card);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+    .settings-card-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .settings-card-title svg { width: 20px; height: 20px; color: var(--color-primary); }
+    .form-group { margin-bottom: 16px; }
+    .form-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--color-text-muted);
+      margin-bottom: 6px;
+    }
+    .form-input {
+      width: 100%;
+      padding: 10px 14px;
+      background: var(--color-bg);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-sm);
+      color: var(--color-text);
+      font-size: 14px;
+    }
+    .form-input:focus {
+      outline: none;
+      border-color: var(--color-primary);
+    }
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .form-hint {
+      font-size: 12px;
+      color: var(--color-text-muted);
+      margin-top: 4px;
+    }
+    .form-checkbox {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .form-checkbox input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--color-primary);
+    }
+    .form-checkbox label {
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 20px;
+      border: 1px solid transparent;
+      border-radius: var(--radius-sm);
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .btn svg { width: 16px; height: 16px; }
+    .btn-primary { background: var(--color-primary); color: white; }
+    .btn-primary:hover { background: var(--color-primary-hover); }
+    .btn-secondary {
+      background: transparent;
+      color: var(--color-text);
+      border: 1px solid var(--color-border);
+    }
+    .btn-secondary:hover { background: var(--color-card-hover); }
+    .status-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      padding: 4px 10px;
+      border-radius: 12px;
+    }
+    .status-indicator-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+    .status-connected {
+      background: var(--color-success-bg);
+      color: var(--color-success);
+    }
+    .status-connected .status-indicator-dot { background: var(--color-success); }
+    .status-disconnected {
+      background: var(--color-danger-bg);
+      color: var(--color-danger);
+    }
+    .status-disconnected .status-indicator-dot { background: var(--color-danger); }
+    .status-disabled {
+      background: var(--color-card-hover);
+      color: var(--color-text-muted);
+    }
+    .status-disabled .status-indicator-dot { background: var(--color-text-muted); }
+    .settings-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid var(--color-border);
+    }
+    .alert {
+      padding: 12px 16px;
+      border-radius: var(--radius-sm);
+      margin-bottom: 16px;
+      font-size: 14px;
+    }
+    .alert-success {
+      background: var(--color-success-bg);
+      color: var(--color-success);
+      border: 1px solid var(--color-success);
+    }
+    .alert-error {
+      background: var(--color-danger-bg);
+      color: var(--color-danger);
+      border: 1px solid var(--color-danger);
+    }
+  </style>
+</head>
+<body>
+  <div class="app-layout">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <svg class="sidebar-brand-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+        </svg>
+        <span class="sidebar-brand-text">HealthChecker</span>
+      </div>
+      <div>
+        <a href="/" class="sidebar-btn sidebar-btn-secondary" style="text-decoration: none;">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+          </svg>
+          Dashboard
+        </a>
+        <a href="/analytics" class="sidebar-btn sidebar-btn-secondary" style="margin-top: 8px; text-decoration: none;">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="20" x2="18" y2="10"></line>
+            <line x1="12" y1="20" x2="12" y2="4"></line>
+            <line x1="6" y1="20" x2="6" y2="14"></line>
+          </svg>
+          Analytics
+        </a>
+        <a href="/settings" class="sidebar-btn sidebar-btn-secondary" style="margin-top: 8px; text-decoration: none; background: var(--color-card-hover); color: var(--color-text);">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+          Settings
+        </a>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <div class="main-header">
+        <h1 class="main-title">Settings</h1>
+        <p class="main-subtitle">Configure application settings and integrations</p>
+      </div>
+
+      <div id="settings-alert"></div>
+
+      <form id="mqtt-settings-form">
+        <div class="settings-card">
+          <div class="settings-card-title">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 18l6-6-6-6"></path>
+            </svg>
+            MQTT Integration
+            {{ if .MQTT.Enabled }}
+              {{ if .MQTTConnected }}
+              <span class="status-indicator status-connected">
+                <span class="status-indicator-dot"></span>
+                Connected
+              </span>
+              {{ else }}
+              <span class="status-indicator status-disconnected">
+                <span class="status-indicator-dot"></span>
+                Disconnected
+              </span>
+              {{ end }}
+            {{ else }}
+            <span class="status-indicator status-disabled">
+              <span class="status-indicator-dot"></span>
+              Disabled
+            </span>
+            {{ end }}
+          </div>
+
+          <p style="color: var(--color-text-muted); font-size: 14px; margin-bottom: 20px;">
+            Enable MQTT to publish state change events to an MQTT broker. Use this to integrate with home automation systems or custom alerting.
+          </p>
+
+          <div class="form-group">
+            <div class="form-checkbox">
+              <input type="checkbox" id="mqtt_enabled" name="mqtt_enabled" value="true" {{ if .MQTT.Enabled }}checked{{ end }}>
+              <label for="mqtt_enabled">Enable MQTT notifications</label>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Broker URL</label>
+              <input class="form-input" type="text" name="mqtt_broker" value="{{ .MQTT.Broker }}" placeholder="tcp://localhost:1883">
+              <div class="form-hint">Format: tcp://host:port or ssl://host:port</div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Client ID (optional)</label>
+              <input class="form-input" type="text" name="mqtt_client_id" value="{{ .MQTT.ClientID }}" placeholder="healthchecker">
+              <div class="form-hint">Leave empty for auto-generated ID</div>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Username (optional)</label>
+              <input class="form-input" type="text" name="mqtt_username" value="{{ .MQTT.Username }}" placeholder="username">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Password (optional)</label>
+              <input class="form-input" type="password" name="mqtt_password" value="{{ .MQTT.Password }}" placeholder="••••••••">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Base Topic</label>
+            <input class="form-input" type="text" name="mqtt_topic" value="{{ .MQTT.Topic }}" placeholder="healthchecker/status">
+            <div class="form-hint">Messages will be published to: {base_topic}/{hostname}/{check_id or check_type}</div>
+          </div>
+
+          <div class="settings-footer">
+            <button type="button" class="btn btn-secondary" onclick="window.location.reload()">
+              Cancel
+            </button>
+            <button type="submit" class="btn btn-primary" hx-post="/settings/mqtt" hx-include="#mqtt-settings-form" hx-target="#settings-alert" hx-swap="innerHTML">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                <polyline points="7 3 7 8 15 8"></polyline>
+              </svg>
+              Save MQTT Settings
+            </button>
+          </div>
+        </div>
+      </form>
+    </main>
+  </div>
+</body>
+</html>
+{{ end }}

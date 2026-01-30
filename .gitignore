@@ -36,5 +36,7 @@ Thumbs.db
 # Config files with secrets
 config.yaml
 config.toml
+config.bak.yaml
+config.bak.toml
 !config.example.yaml
 !config.example.toml

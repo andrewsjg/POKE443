@@ -2,6 +2,10 @@
 
 POKE 443 is a simple utility service that periodically runs health checks (Ping, HTTP or TCP) against a list of hosts from a YAML/TOML config, shows live status in a built-in web UI, and optionally notifies Healthchecks.io and/or publishes state changes to MQTT.
 
+This is the 'productionised' version of a very old app I wrote and then used as something to use to experiment with AI coding tools and [write about](https://jgandrews.com/posts/claude-and-copilot/). I expanded on that work to make the UI much slicker and polished. I also renamed the project and gave it a fresh GitHub Repo.
+
+![Dashboard Screenshot](images/screenshot.png)
+
 ## Whats with the name?
 
 POKE is a basic instruction that pokes a single byte value directly into a specific memory location. It was famously used on systems like the ZX Spectrum to modify memory to give players infinite lives in games and such like.  If you issued a ```POKE 35899,0``` instruction before playing [Manic Miner](https://en.wikipedia.org/wiki/Manic_Miner) would give the player infinite lives. 

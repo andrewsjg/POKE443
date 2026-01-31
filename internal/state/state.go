@@ -17,6 +17,8 @@ import (
 	"github.com/andrewsjg/simple-healthchecker/copilot/internal/checks"
 	"github.com/andrewsjg/simple-healthchecker/copilot/internal/config"
 	"github.com/andrewsjg/simple-healthchecker/copilot/internal/mqtt"
+	"github.com/andrewsjg/simple-healthchecker/copilot/internal/pushover"
+	"github.com/andrewsjg/simple-healthchecker/copilot/internal/telegram"
 )
 
 // CheckDataPoint represents a single check result with timestamp
@@ -54,6 +56,8 @@ type CheckStatus struct {
 	ID             string // Unique identifier for this check (for dependencies)
 	DependsOn      string // ID of the check this depends on
 	MQTTNotify     bool   // Send MQTT notifications on state change
+	PushoverNotify bool   // Send Pushover notifications on state change
+	TelegramNotify bool   // Send Telegram notifications on state change
 	// Uptime tracking
 	TotalChecks   int64
 	SuccessChecks int64
@@ -81,12 +85,14 @@ type HostStatus struct {
 }
 
 type State struct {
-	mu         sync.RWMutex
-	cfg        *config.Config
-	hosts      map[string]*HostStatus  // key: host name
-	checksByID map[string]*CheckStatus // lookup checks by ID for dependency resolution
-	configPath string
-	mqttClient *mqtt.Client
+	mu             sync.RWMutex
+	cfg            *config.Config
+	hosts          map[string]*HostStatus  // key: host name
+	checksByID     map[string]*CheckStatus // lookup checks by ID for dependency resolution
+	configPath     string
+	mqttClient     *mqtt.Client
+	pushoverClient *pushover.Client
+	telegramClient *telegram.Client
 }
 
 func New(cfg *config.Config) *State {
@@ -98,21 +104,31 @@ func New(cfg *config.Config) *State {
 		}
 	}
 
+	// Initialize Pushover client
+	pushoverClient := pushover.NewClient(cfg.Settings.Pushover)
+
+	// Initialize Telegram client
+	telegramClient := telegram.NewClient(cfg.Settings.Telegram)
+
 	st := &State{
-		cfg:        cfg,
-		hosts:      make(map[string]*HostStatus),
-		checksByID: make(map[string]*CheckStatus),
-		mqttClient: mqttClient,
+		cfg:            cfg,
+		hosts:          make(map[string]*HostStatus),
+		checksByID:     make(map[string]*CheckStatus),
+		mqttClient:     mqttClient,
+		pushoverClient: pushoverClient,
+		telegramClient: telegramClient,
 	}
 	for _, h := range cfg.Hosts {
 		hs := &HostStatus{Name: h.Name, Address: h.Address, HCURL: h.HealthchecksPingURL}
 		for _, c := range h.Checks {
 			cs := CheckStatus{
-				Type:       c.Type,
-				Enabled:    c.Enabled,
-				ID:         c.ID,
-				DependsOn:  c.DependsOn,
-				MQTTNotify: c.MQTTNotify,
+				Type:           c.Type,
+				Enabled:        c.Enabled,
+				ID:             c.ID,
+				DependsOn:      c.DependsOn,
+				MQTTNotify:     c.MQTTNotify,
+				PushoverNotify: c.PushoverNotify,
+				TelegramNotify: c.TelegramNotify,
 			}
 			if c.Type == config.CheckHTTP {
 				cs.URL = c.URL
@@ -496,7 +512,7 @@ func (s *State) UpdateHost(oldName, newName, address, hcurl string) error {
 	return s.saveConfigLocked()
 }
 
-func (s *State) AddHTTPCheck(hostName, url string, expect int, id, dependsOn string, mqttNotify bool) error {
+func (s *State) AddHTTPCheck(hostName, url string, expect int, id, dependsOn string, mqttNotify, pushoverNotify, telegramNotify bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	hs, ok := s.hosts[hostName]
@@ -504,11 +520,11 @@ func (s *State) AddHTTPCheck(hostName, url string, expect int, id, dependsOn str
 		return fmt.Errorf("host not found")
 	}
 	// append to runtime
-	hs.Checks = append(hs.Checks, CheckStatus{Type: config.CheckHTTP, Enabled: true, URL: url, Expect: expect, ID: id, DependsOn: dependsOn, MQTTNotify: mqttNotify})
+	hs.Checks = append(hs.Checks, CheckStatus{Type: config.CheckHTTP, Enabled: true, URL: url, Expect: expect, ID: id, DependsOn: dependsOn, MQTTNotify: mqttNotify, PushoverNotify: pushoverNotify, TelegramNotify: telegramNotify})
 	// append to cfg
 	for i := range s.cfg.Hosts {
 		if s.cfg.Hosts[i].Name == hostName {
-			s.cfg.Hosts[i].Checks = append(s.cfg.Hosts[i].Checks, config.Check{Type: config.CheckHTTP, Enabled: true, URL: url, Expect: expect, ID: id, DependsOn: dependsOn, MQTTNotify: mqttNotify})
+			s.cfg.Hosts[i].Checks = append(s.cfg.Hosts[i].Checks, config.Check{Type: config.CheckHTTP, Enabled: true, URL: url, Expect: expect, ID: id, DependsOn: dependsOn, MQTTNotify: mqttNotify, PushoverNotify: pushoverNotify, TelegramNotify: telegramNotify})
 			break
 		}
 	}
@@ -533,17 +549,17 @@ func (s *State) DeleteHost(name string) error {
 	return s.saveConfigLocked()
 }
 
-func (s *State) AddPingCheck(hostName, id, dependsOn string, mqttNotify bool) error {
+func (s *State) AddPingCheck(hostName, id, dependsOn string, mqttNotify, pushoverNotify, telegramNotify bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	hs, ok := s.hosts[hostName]
 	if !ok {
 		return fmt.Errorf("host not found")
 	}
-	hs.Checks = append(hs.Checks, CheckStatus{Type: config.CheckPing, Enabled: true, ID: id, DependsOn: dependsOn, MQTTNotify: mqttNotify})
+	hs.Checks = append(hs.Checks, CheckStatus{Type: config.CheckPing, Enabled: true, ID: id, DependsOn: dependsOn, MQTTNotify: mqttNotify, PushoverNotify: pushoverNotify, TelegramNotify: telegramNotify})
 	for i := range s.cfg.Hosts {
 		if s.cfg.Hosts[i].Name == hostName {
-			s.cfg.Hosts[i].Checks = append(s.cfg.Hosts[i].Checks, config.Check{Type: config.CheckPing, Enabled: true, ID: id, DependsOn: dependsOn, MQTTNotify: mqttNotify})
+			s.cfg.Hosts[i].Checks = append(s.cfg.Hosts[i].Checks, config.Check{Type: config.CheckPing, Enabled: true, ID: id, DependsOn: dependsOn, MQTTNotify: mqttNotify, PushoverNotify: pushoverNotify, TelegramNotify: telegramNotify})
 			break
 		}
 	}
@@ -551,17 +567,17 @@ func (s *State) AddPingCheck(hostName, id, dependsOn string, mqttNotify bool) er
 	return s.saveConfigLocked()
 }
 
-func (s *State) AddTCPCheck(hostName string, port int, id, dependsOn string, mqttNotify bool) error {
+func (s *State) AddTCPCheck(hostName string, port int, id, dependsOn string, mqttNotify, pushoverNotify, telegramNotify bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	hs, ok := s.hosts[hostName]
 	if !ok {
 		return fmt.Errorf("host not found")
 	}
-	hs.Checks = append(hs.Checks, CheckStatus{Type: config.CheckTCP, Enabled: true, Port: port, ID: id, DependsOn: dependsOn, MQTTNotify: mqttNotify})
+	hs.Checks = append(hs.Checks, CheckStatus{Type: config.CheckTCP, Enabled: true, Port: port, ID: id, DependsOn: dependsOn, MQTTNotify: mqttNotify, PushoverNotify: pushoverNotify, TelegramNotify: telegramNotify})
 	for i := range s.cfg.Hosts {
 		if s.cfg.Hosts[i].Name == hostName {
-			s.cfg.Hosts[i].Checks = append(s.cfg.Hosts[i].Checks, config.Check{Type: config.CheckTCP, Enabled: true, Port: port, ID: id, DependsOn: dependsOn, MQTTNotify: mqttNotify})
+			s.cfg.Hosts[i].Checks = append(s.cfg.Hosts[i].Checks, config.Check{Type: config.CheckTCP, Enabled: true, Port: port, ID: id, DependsOn: dependsOn, MQTTNotify: mqttNotify, PushoverNotify: pushoverNotify, TelegramNotify: telegramNotify})
 			break
 		}
 	}
@@ -592,7 +608,7 @@ func (s *State) RemoveCheck(hostName string, idx int) error {
 	return s.saveConfigLocked()
 }
 
-func (s *State) UpdateHTTPCheck(hostName string, idx int, url string, expect int, id, dependsOn string, mqttNotify bool) error {
+func (s *State) UpdateHTTPCheck(hostName string, idx int, url string, expect int, id, dependsOn string, mqttNotify, pushoverNotify, telegramNotify bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	hs, ok := s.hosts[hostName]
@@ -610,6 +626,8 @@ func (s *State) UpdateHTTPCheck(hostName string, idx int, url string, expect int
 	hs.Checks[idx].ID = id
 	hs.Checks[idx].DependsOn = dependsOn
 	hs.Checks[idx].MQTTNotify = mqttNotify
+	hs.Checks[idx].PushoverNotify = pushoverNotify
+	hs.Checks[idx].TelegramNotify = telegramNotify
 	for i := range s.cfg.Hosts {
 		if s.cfg.Hosts[i].Name == hostName {
 			if idx < 0 || idx >= len(s.cfg.Hosts[i].Checks) {
@@ -620,6 +638,8 @@ func (s *State) UpdateHTTPCheck(hostName string, idx int, url string, expect int
 			s.cfg.Hosts[i].Checks[idx].ID = id
 			s.cfg.Hosts[i].Checks[idx].DependsOn = dependsOn
 			s.cfg.Hosts[i].Checks[idx].MQTTNotify = mqttNotify
+			s.cfg.Hosts[i].Checks[idx].PushoverNotify = pushoverNotify
+			s.cfg.Hosts[i].Checks[idx].TelegramNotify = telegramNotify
 			break
 		}
 	}
@@ -627,7 +647,7 @@ func (s *State) UpdateHTTPCheck(hostName string, idx int, url string, expect int
 	return s.saveConfigLocked()
 }
 
-func (s *State) UpdateTCPCheck(hostName string, idx int, port int, id, dependsOn string, mqttNotify bool) error {
+func (s *State) UpdateTCPCheck(hostName string, idx int, port int, id, dependsOn string, mqttNotify, pushoverNotify, telegramNotify bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	hs, ok := s.hosts[hostName]
@@ -644,6 +664,8 @@ func (s *State) UpdateTCPCheck(hostName string, idx int, port int, id, dependsOn
 	hs.Checks[idx].ID = id
 	hs.Checks[idx].DependsOn = dependsOn
 	hs.Checks[idx].MQTTNotify = mqttNotify
+	hs.Checks[idx].PushoverNotify = pushoverNotify
+	hs.Checks[idx].TelegramNotify = telegramNotify
 	for i := range s.cfg.Hosts {
 		if s.cfg.Hosts[i].Name == hostName {
 			if idx < 0 || idx >= len(s.cfg.Hosts[i].Checks) {
@@ -653,6 +675,8 @@ func (s *State) UpdateTCPCheck(hostName string, idx int, port int, id, dependsOn
 			s.cfg.Hosts[i].Checks[idx].ID = id
 			s.cfg.Hosts[i].Checks[idx].DependsOn = dependsOn
 			s.cfg.Hosts[i].Checks[idx].MQTTNotify = mqttNotify
+			s.cfg.Hosts[i].Checks[idx].PushoverNotify = pushoverNotify
+			s.cfg.Hosts[i].Checks[idx].TelegramNotify = telegramNotify
 			break
 		}
 	}
@@ -660,8 +684,8 @@ func (s *State) UpdateTCPCheck(hostName string, idx int, port int, id, dependsOn
 	return s.saveConfigLocked()
 }
 
-// UpdateCheckDependencies updates the ID, DependsOn, and MQTTNotify fields for a check
-func (s *State) UpdateCheckDependencies(hostName string, idx int, id, dependsOn string, mqttNotify bool) error {
+// UpdateCheckDependencies updates the ID, DependsOn, and notification flags for a check
+func (s *State) UpdateCheckDependencies(hostName string, idx int, id, dependsOn string, mqttNotify, pushoverNotify, telegramNotify bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	hs, ok := s.hosts[hostName]
@@ -674,6 +698,8 @@ func (s *State) UpdateCheckDependencies(hostName string, idx int, id, dependsOn 
 	hs.Checks[idx].ID = id
 	hs.Checks[idx].DependsOn = dependsOn
 	hs.Checks[idx].MQTTNotify = mqttNotify
+	hs.Checks[idx].PushoverNotify = pushoverNotify
+	hs.Checks[idx].TelegramNotify = telegramNotify
 	for i := range s.cfg.Hosts {
 		if s.cfg.Hosts[i].Name == hostName {
 			if idx < 0 || idx >= len(s.cfg.Hosts[i].Checks) {
@@ -682,6 +708,8 @@ func (s *State) UpdateCheckDependencies(hostName string, idx int, id, dependsOn 
 			s.cfg.Hosts[i].Checks[idx].ID = id
 			s.cfg.Hosts[i].Checks[idx].DependsOn = dependsOn
 			s.cfg.Hosts[i].Checks[idx].MQTTNotify = mqttNotify
+			s.cfg.Hosts[i].Checks[idx].PushoverNotify = pushoverNotify
+			s.cfg.Hosts[i].Checks[idx].TelegramNotify = telegramNotify
 			break
 		}
 	}
@@ -929,6 +957,14 @@ func (s *State) runOnce() {
 					if c.MQTTNotify && s.mqttClient != nil {
 						s.publishMQTTStateChange(hs.Name, hs.Address, c, "down")
 					}
+					// Pushover notification
+					if c.PushoverNotify && s.pushoverClient != nil {
+						s.sendPushoverAlert(hs.Name, hs.Address, c, "down")
+					}
+					// Telegram notification
+					if c.TelegramNotify && s.telegramClient != nil {
+						s.sendTelegramAlert(hs.Name, hs.Address, c, "down")
+					}
 				} else if !wasOK && c.OK {
 					// Recovered
 					duration := time.Duration(0)
@@ -951,6 +987,14 @@ func (s *State) runOnce() {
 						if c.MQTTNotify && s.mqttClient != nil {
 							s.publishMQTTStateChange(hs.Name, hs.Address, c, "up")
 						}
+						// Pushover notification
+						if c.PushoverNotify && s.pushoverClient != nil {
+							s.sendPushoverAlert(hs.Name, hs.Address, c, "up")
+						}
+						// Telegram notification
+						if c.TelegramNotify && s.telegramClient != nil {
+							s.sendTelegramAlert(hs.Name, hs.Address, c, "up")
+						}
 					}
 				} else if wasParentFailed && !c.ParentFailed && !c.OK {
 					// Parent recovered but we're still down - now fire the actual down event
@@ -966,6 +1010,14 @@ func (s *State) runOnce() {
 					// MQTT notification
 					if c.MQTTNotify && s.mqttClient != nil {
 						s.publishMQTTStateChange(hs.Name, hs.Address, c, "down")
+					}
+					// Pushover notification
+					if c.PushoverNotify && s.pushoverClient != nil {
+						s.sendPushoverAlert(hs.Name, hs.Address, c, "down")
+					}
+					// Telegram notification
+					if c.TelegramNotify && s.telegramClient != nil {
+						s.sendTelegramAlert(hs.Name, hs.Address, c, "down")
 					}
 				}
 			}
@@ -1132,6 +1184,44 @@ func (s *State) publishMQTTStateChange(hostName, address string, c *CheckStatus,
 	}
 }
 
+// sendPushoverAlert sends a notification via Pushover
+func (s *State) sendPushoverAlert(hostName, address string, c *CheckStatus, status string) {
+	if s.pushoverClient == nil || !s.pushoverClient.IsEnabled() {
+		return
+	}
+	msg := pushover.AlertMessage{
+		Host:      hostName,
+		Address:   address,
+		CheckType: string(c.Type),
+		CheckID:   c.ID,
+		Status:    status,
+		Message:   c.Message,
+		LatencyMS: c.LatencyMS,
+	}
+	if err := s.pushoverClient.SendAlert(msg); err != nil {
+		log.Printf("Pushover error: %v", err)
+	}
+}
+
+// sendTelegramAlert sends a notification via Telegram
+func (s *State) sendTelegramAlert(hostName, address string, c *CheckStatus, status string) {
+	if s.telegramClient == nil || !s.telegramClient.IsEnabled() {
+		return
+	}
+	msg := telegram.AlertMessage{
+		Host:      hostName,
+		Address:   address,
+		CheckType: string(c.Type),
+		CheckID:   c.ID,
+		Status:    status,
+		Message:   c.Message,
+		LatencyMS: c.LatencyMS,
+	}
+	if err := s.telegramClient.SendAlert(msg); err != nil {
+		log.Printf("Telegram error: %v", err)
+	}
+}
+
 // GetMQTTSettings returns the current MQTT settings
 func (s *State) GetMQTTSettings() config.MQTTSettings {
 	s.mu.RLock()
@@ -1157,4 +1247,70 @@ func (s *State) IsMQTTConnected() bool {
 		return false
 	}
 	return s.mqttClient.IsConnected()
+}
+
+// GetPushoverSettings returns the current Pushover settings
+func (s *State) GetPushoverSettings() config.PushoverSettings {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.cfg.Settings.Pushover
+}
+
+// UpdatePushoverSettings updates the Pushover settings
+func (s *State) UpdatePushoverSettings(settings config.PushoverSettings) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.cfg.Settings.Pushover = settings
+	s.pushoverClient.UpdateSettings(settings)
+	return s.saveConfigLocked()
+}
+
+// IsPushoverEnabled returns whether Pushover notifications are enabled
+func (s *State) IsPushoverEnabled() bool {
+	if s.pushoverClient == nil {
+		return false
+	}
+	return s.pushoverClient.IsEnabled()
+}
+
+// TestPushover sends a test Pushover notification
+func (s *State) TestPushover() error {
+	if s.pushoverClient == nil {
+		return fmt.Errorf("pushover client not initialized")
+	}
+	return s.pushoverClient.TestNotification()
+}
+
+// GetTelegramSettings returns the current Telegram settings
+func (s *State) GetTelegramSettings() config.TelegramSettings {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.cfg.Settings.Telegram
+}
+
+// UpdateTelegramSettings updates the Telegram settings
+func (s *State) UpdateTelegramSettings(settings config.TelegramSettings) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.cfg.Settings.Telegram = settings
+	s.telegramClient.UpdateSettings(settings)
+	return s.saveConfigLocked()
+}
+
+// IsTelegramEnabled returns whether Telegram notifications are enabled
+func (s *State) IsTelegramEnabled() bool {
+	if s.telegramClient == nil {
+		return false
+	}
+	return s.telegramClient.IsEnabled()
+}
+
+// TestTelegram sends a test Telegram notification
+func (s *State) TestTelegram() error {
+	if s.telegramClient == nil {
+		return fmt.Errorf("telegram client not initialized")
+	}
+	return s.telegramClient.TestNotification()
 }

@@ -19,14 +19,16 @@ const (
 )
 
 type Check struct {
-	Type       CheckType `koanf:"type" json:"type" yaml:"type" toml:"type"`
-	Enabled    bool      `koanf:"enabled" json:"enabled" yaml:"enabled" toml:"enabled"`
-	URL        string    `koanf:"url" json:"url" yaml:"url" toml:"url"`
-	Expect     int       `koanf:"expect" json:"expect" yaml:"expect" toml:"expect"`
-	Port       int       `koanf:"port" json:"port" yaml:"port" toml:"port"`                             // TCP port for tcp checks
-	ID         string    `koanf:"id" json:"id" yaml:"id" toml:"id"`                                     // Optional unique identifier for this check
-	DependsOn  string    `koanf:"depends_on" json:"depends_on" yaml:"depends_on" toml:"depends_on"`     // ID of check this depends on
-	MQTTNotify bool      `koanf:"mqtt_notify" json:"mqtt_notify" yaml:"mqtt_notify" toml:"mqtt_notify"` // Send MQTT notifications on state change
+	Type           CheckType `koanf:"type" json:"type" yaml:"type" toml:"type"`
+	Enabled        bool      `koanf:"enabled" json:"enabled" yaml:"enabled" toml:"enabled"`
+	URL            string    `koanf:"url" json:"url" yaml:"url" toml:"url"`
+	Expect         int       `koanf:"expect" json:"expect" yaml:"expect" toml:"expect"`
+	Port           int       `koanf:"port" json:"port" yaml:"port" toml:"port"`                                             // TCP port for tcp checks
+	ID             string    `koanf:"id" json:"id" yaml:"id" toml:"id"`                                                     // Optional unique identifier for this check
+	DependsOn      string    `koanf:"depends_on" json:"depends_on" yaml:"depends_on" toml:"depends_on"`                     // ID of check this depends on
+	MQTTNotify     bool      `koanf:"mqtt_notify" json:"mqtt_notify" yaml:"mqtt_notify" toml:"mqtt_notify"`                 // Send MQTT notifications on state change
+	PushoverNotify bool      `koanf:"pushover_notify" json:"pushover_notify" yaml:"pushover_notify" toml:"pushover_notify"` // Send Pushover notifications
+	TelegramNotify bool      `koanf:"telegram_notify" json:"telegram_notify" yaml:"telegram_notify" toml:"telegram_notify"` // Send Telegram notifications
 }
 
 type Host struct {
@@ -46,9 +48,29 @@ type MQTTSettings struct {
 	ClientID string `koanf:"client_id" json:"client_id" yaml:"client_id" toml:"client_id"`
 }
 
+// PushoverSettings holds Pushover notification configuration
+type PushoverSettings struct {
+	Enabled  bool   `koanf:"enabled" json:"enabled" yaml:"enabled" toml:"enabled"`
+	APIToken string `koanf:"api_token" json:"api_token" yaml:"api_token" toml:"api_token"` // Application API token
+	UserKey  string `koanf:"user_key" json:"user_key" yaml:"user_key" toml:"user_key"`     // User or group key
+	Device   string `koanf:"device" json:"device" yaml:"device" toml:"device"`             // Optional: specific device name
+	Sound    string `koanf:"sound" json:"sound" yaml:"sound" toml:"sound"`                 // Optional: notification sound
+}
+
+// TelegramSettings holds Telegram bot notification configuration
+type TelegramSettings struct {
+	Enabled        bool   `koanf:"enabled" json:"enabled" yaml:"enabled" toml:"enabled"`
+	BotToken       string `koanf:"bot_token" json:"bot_token" yaml:"bot_token" toml:"bot_token"`                         // Bot token from @BotFather
+	ChatID         string `koanf:"chat_id" json:"chat_id" yaml:"chat_id" toml:"chat_id"`                                 // Chat/group/channel ID
+	DisablePreview bool   `koanf:"disable_preview" json:"disable_preview" yaml:"disable_preview" toml:"disable_preview"` // Disable link preview
+	Silent         bool   `koanf:"silent" json:"silent" yaml:"silent" toml:"silent"`                                     // Send without notification sound
+}
+
 // Settings holds application-wide settings
 type Settings struct {
-	MQTT MQTTSettings `koanf:"mqtt" json:"mqtt" yaml:"mqtt" toml:"mqtt"`
+	MQTT     MQTTSettings     `koanf:"mqtt" json:"mqtt" yaml:"mqtt" toml:"mqtt"`
+	Pushover PushoverSettings `koanf:"pushover" json:"pushover" yaml:"pushover" toml:"pushover"`
+	Telegram TelegramSettings `koanf:"telegram" json:"telegram" yaml:"telegram" toml:"telegram"`
 }
 
 type Config struct {

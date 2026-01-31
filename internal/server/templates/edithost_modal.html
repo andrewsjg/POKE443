@@ -1,6 +1,6 @@
 {{ define "edithost_modal.html" }}
 <div class="modal-overlay" hx-get="/close-modal" hx-target="#modal" hx-swap="innerHTML" hx-trigger="click[target==this]">
-  <div class="modal-container" onclick="event.stopPropagation()" style="max-width: 600px;">
+  <div class="modal-container" onclick="event.stopPropagation()" style="max-width: 850px;">
     <div class="modal-header">
       <h2 class="modal-title">Edit Host</h2>
       <button class="modal-close" hx-get="/close-modal" hx-target="#modal" hx-swap="innerHTML">
@@ -37,7 +37,9 @@
               <th>Type</th>
               <th>Configuration</th>
               <th>Dependencies</th>
-              <th style="width: 50px;">MQTT</th>
+              <th style="width: 40px; text-align: center;" title="MQTT Notifications">MQ</th>
+              <th style="width: 40px; text-align: center;" title="Pushover Notifications">PO</th>
+              <th style="width: 40px; text-align: center;" title="Telegram Notifications">TG</th>
               <th style="width: 80px;"></th>
             </tr>
           </thead>
@@ -78,7 +80,13 @@
                 </div>
               </td>
               <td style="text-align: center;">
-                <input type="checkbox" name="mqtt_notify_{{ $i }}" value="true" {{ if $c.MQTTNotify }}checked{{ end }} title="Send MQTT notification on state change" style="width: 18px; height: 18px;">
+                <input type="checkbox" name="mqtt_notify_{{ $i }}" value="true" {{ if $c.MQTTNotify }}checked{{ end }} title="Send MQTT notification" style="width: 16px; height: 16px;">
+              </td>
+              <td style="text-align: center;">
+                <input type="checkbox" name="pushover_notify_{{ $i }}" value="true" {{ if $c.PushoverNotify }}checked{{ end }} title="Send Pushover notification" style="width: 16px; height: 16px;">
+              </td>
+              <td style="text-align: center;">
+                <input type="checkbox" name="telegram_notify_{{ $i }}" value="true" {{ if $c.TelegramNotify }}checked{{ end }} title="Send Telegram notification" style="width: 16px; height: 16px;">
               </td>
               <td>
                 <button type="button" class="btn btn-danger btn-sm" hx-post="/edithost-delcheck" hx-vals='{"host":"{{ $.Name }}","idx":"{{ $i }}"}' hx-target="#modal" hx-swap="innerHTML">
@@ -106,10 +114,21 @@
               </select>
             </div>
             <span id="check-config" style="display: contents;"></span>
-            <div class="form-group" style="flex: 0 0 60px;">
-              <label class="form-label">MQTT</label>
-              <div style="display: flex; align-items: center; height: 38px;">
-                <input type="checkbox" name="mqtt_notify" value="true" title="Send MQTT notification on state change" style="width: 18px; height: 18px;">
+            <div class="form-group" style="flex: 0 0 auto;">
+              <label class="form-label">Notify</label>
+              <div style="display: flex; align-items: center; gap: 8px; height: 38px;">
+                <label style="display: flex; align-items: center; gap: 2px; font-size: 11px; color: var(--color-text-muted);">
+                  <input type="checkbox" name="mqtt_notify" value="true" title="Send MQTT notification" style="width: 14px; height: 14px;">
+                  MQ
+                </label>
+                <label style="display: flex; align-items: center; gap: 2px; font-size: 11px; color: var(--color-text-muted);">
+                  <input type="checkbox" name="pushover_notify" value="true" title="Send Pushover notification" style="width: 14px; height: 14px;">
+                  PO
+                </label>
+                <label style="display: flex; align-items: center; gap: 2px; font-size: 11px; color: var(--color-text-muted);">
+                  <input type="checkbox" name="telegram_notify" value="true" title="Send Telegram notification" style="width: 14px; height: 14px;">
+                  TG
+                </label>
               </div>
             </div>
             <div class="form-group" style="flex: 0 0 auto; align-self: flex-end;">

@@ -3,13 +3,17 @@ package server
 import (
 	"context"
 	"embed"
+	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"math"
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/andrewsjg/simple-healthchecker/copilot/internal/config"
 	"github.com/andrewsjg/simple-healthchecker/copilot/internal/state"
@@ -78,6 +82,10 @@ func (s *Server) Start(addr string) error {
 	mux.HandleFunc("/events", s.handleEvents)
 	mux.HandleFunc("/settings", s.handleSettings)
 	mux.HandleFunc("/settings/mqtt", s.handleSettingsMQTT)
+	mux.HandleFunc("/settings/pushover", s.handleSettingsPushover)
+	mux.HandleFunc("/settings/pushover/test", s.handleTestPushover)
+	mux.HandleFunc("/settings/telegram", s.handleSettingsTelegram)
+	mux.HandleFunc("/settings/telegram/test", s.handleTestTelegram)
 	s.http = &http.Server{Addr: addr, Handler: logRequests(mux)}
 	return s.http.ListenAndServe()
 }
@@ -141,9 +149,13 @@ func (s *Server) handleAddHost(w http.ResponseWriter, r *http.Request) {
 	ids := r.Form["checks_id"]
 	dependsOns := r.Form["checks_depends_on"]
 	mqttNotifies := r.Form["checks_mqtt_notify"]
+	pushoverNotifies := r.Form["checks_pushover_notify"]
+	telegramNotifies := r.Form["checks_telegram_notify"]
 
 	// Also check the direct checkbox (not in hidden fields)
 	directMqttNotify := r.FormValue("mqtt_notify") == "true"
+	directPushoverNotify := r.FormValue("pushover_notify") == "true"
+	directTelegramNotify := r.FormValue("telegram_notify") == "true"
 	directType := r.FormValue("type")
 	directURL := r.FormValue("url")
 	directPort := r.FormValue("port")
@@ -162,7 +174,7 @@ func (s *Server) handleAddHost(w http.ResponseWriter, r *http.Request) {
 					expectVal = v
 				}
 			}
-			_ = s.st.AddHTTPCheck(name, directURL, expectVal, directID, directDependsOn, directMqttNotify)
+			_ = s.st.AddHTTPCheck(name, directURL, expectVal, directID, directDependsOn, directMqttNotify, directPushoverNotify, directTelegramNotify)
 		case "tcp":
 			portVal := 0
 			if directPort != "" {
@@ -170,10 +182,10 @@ func (s *Server) handleAddHost(w http.ResponseWriter, r *http.Request) {
 					portVal = v
 				}
 			}
-			_ = s.st.AddTCPCheck(name, portVal, directID, directDependsOn, directMqttNotify)
+			_ = s.st.AddTCPCheck(name, portVal, directID, directDependsOn, directMqttNotify, directPushoverNotify, directTelegramNotify)
 		default:
 			// Default to ping
-			_ = s.st.AddPingCheck(name, directID, directDependsOn, directMqttNotify)
+			_ = s.st.AddPingCheck(name, directID, directDependsOn, directMqttNotify, directPushoverNotify, directTelegramNotify)
 		}
 	} else {
 		for i, typ := range types {
@@ -189,10 +201,18 @@ func (s *Server) handleAddHost(w http.ResponseWriter, r *http.Request) {
 			if i < len(mqttNotifies) {
 				mqttNotify = mqttNotifies[i] == "true"
 			}
+			pushoverNotify := false
+			if i < len(pushoverNotifies) {
+				pushoverNotify = pushoverNotifies[i] == "true"
+			}
+			telegramNotify := false
+			if i < len(telegramNotifies) {
+				telegramNotify = telegramNotifies[i] == "true"
+			}
 
 			switch typ {
 			case "ping":
-				_ = s.st.AddPingCheck(name, id, dependsOn, mqttNotify)
+				_ = s.st.AddPingCheck(name, id, dependsOn, mqttNotify, pushoverNotify, telegramNotify)
 			case "http":
 				url := ""
 				if i < len(urls) {
@@ -204,7 +224,7 @@ func (s *Server) handleAddHost(w http.ResponseWriter, r *http.Request) {
 						expect = v
 					}
 				}
-				_ = s.st.AddHTTPCheck(name, url, expect, id, dependsOn, mqttNotify)
+				_ = s.st.AddHTTPCheck(name, url, expect, id, dependsOn, mqttNotify, pushoverNotify, telegramNotify)
 			case "tcp":
 				port := 0
 				if i < len(ports) {
@@ -212,7 +232,7 @@ func (s *Server) handleAddHost(w http.ResponseWriter, r *http.Request) {
 						port = v
 					}
 				}
-				_ = s.st.AddTCPCheck(name, port, id, dependsOn, mqttNotify)
+				_ = s.st.AddTCPCheck(name, port, id, dependsOn, mqttNotify, pushoverNotify, telegramNotify)
 			}
 		}
 	}
@@ -245,6 +265,8 @@ func (s *Server) handleAddHostCheckRow(w http.ResponseWriter, r *http.Request) {
 	id := r.FormValue("id")
 	dependsOn := r.FormValue("depends_on")
 	mqttNotify := r.FormValue("mqtt_notify") == "true"
+	pushoverNotify := r.FormValue("pushover_notify") == "true"
+	telegramNotify := r.FormValue("telegram_notify") == "true"
 	expect := 200
 	if expectStr != "" {
 		if v, err := strconv.Atoi(expectStr); err == nil {
@@ -257,7 +279,7 @@ func (s *Server) handleAddHostCheckRow(w http.ResponseWriter, r *http.Request) {
 			port = v
 		}
 	}
-	data := map[string]any{"Type": typ, "URL": url, "Expect": expect, "Port": port, "ID": id, "DependsOn": dependsOn, "MQTTNotify": mqttNotify}
+	data := map[string]any{"Type": typ, "URL": url, "Expect": expect, "Port": port, "ID": id, "DependsOn": dependsOn, "MQTTNotify": mqttNotify, "PushoverNotify": pushoverNotify, "TelegramNotify": telegramNotify}
 	_ = s.tpl.ExecuteTemplate(w, "addhost_check_row.html", data)
 }
 
@@ -300,6 +322,8 @@ func (s *Server) handleEditHost(w http.ResponseWriter, r *http.Request) {
 		id := r.FormValue(fmt.Sprintf("id_%d", i))
 		dependsOn := r.FormValue(fmt.Sprintf("depends_on_%d", i))
 		mqttNotify := r.FormValue(fmt.Sprintf("mqtt_notify_%d", i)) == "true"
+		pushoverNotify := r.FormValue(fmt.Sprintf("pushover_notify_%d", i)) == "true"
+		telegramNotify := r.FormValue(fmt.Sprintf("telegram_notify_%d", i)) == "true"
 
 		if typ == "http" {
 			url := r.FormValue(fmt.Sprintf("url_%d", i))
@@ -310,7 +334,7 @@ func (s *Server) handleEditHost(w http.ResponseWriter, r *http.Request) {
 					expect = v
 				}
 			}
-			_ = s.st.UpdateHTTPCheck(hostForChecks, i, url, expect, id, dependsOn, mqttNotify)
+			_ = s.st.UpdateHTTPCheck(hostForChecks, i, url, expect, id, dependsOn, mqttNotify, pushoverNotify, telegramNotify)
 		} else if typ == "tcp" {
 			portStr := r.FormValue(fmt.Sprintf("port_%d", i))
 			port := 0
@@ -319,10 +343,10 @@ func (s *Server) handleEditHost(w http.ResponseWriter, r *http.Request) {
 					port = v
 				}
 			}
-			_ = s.st.UpdateTCPCheck(hostForChecks, i, port, id, dependsOn, mqttNotify)
+			_ = s.st.UpdateTCPCheck(hostForChecks, i, port, id, dependsOn, mqttNotify, pushoverNotify, telegramNotify)
 		} else if typ == "ping" {
 			// For ping checks, just update the dependencies
-			_ = s.st.UpdateCheckDependencies(hostForChecks, i, id, dependsOn, mqttNotify)
+			_ = s.st.UpdateCheckDependencies(hostForChecks, i, id, dependsOn, mqttNotify, pushoverNotify, telegramNotify)
 		}
 	}
 
@@ -397,13 +421,15 @@ func (s *Server) handleAddHTTP(w http.ResponseWriter, r *http.Request) {
 	id := r.FormValue("id")
 	dependsOn := r.FormValue("depends_on")
 	mqttNotify := r.FormValue("mqtt_notify") == "true"
+	pushoverNotify := r.FormValue("pushover_notify") == "true"
+	telegramNotify := r.FormValue("telegram_notify") == "true"
 	expect := 200
 	if expectStr != "" {
 		if v, err := strconv.Atoi(expectStr); err == nil {
 			expect = v
 		}
 	}
-	if err := s.st.AddHTTPCheck(host, url, expect, id, dependsOn, mqttNotify); err != nil {
+	if err := s.st.AddHTTPCheck(host, url, expect, id, dependsOn, mqttNotify, pushoverNotify, telegramNotify); err != nil {
 		w.WriteHeader(409)
 		_, _ = w.Write([]byte(err.Error()))
 		return
@@ -425,6 +451,8 @@ func (s *Server) handleEditAddCheck(w http.ResponseWriter, r *http.Request) {
 	id := r.FormValue("id")
 	dependsOn := r.FormValue("depends_on")
 	mqttNotify := r.FormValue("mqtt_notify") == "true"
+	pushoverNotify := r.FormValue("pushover_notify") == "true"
+	telegramNotify := r.FormValue("telegram_notify") == "true"
 	expect := 200
 	if expectStr != "" {
 		if v, err := strconv.Atoi(expectStr); err == nil {
@@ -440,11 +468,11 @@ func (s *Server) handleEditAddCheck(w http.ResponseWriter, r *http.Request) {
 	var err error
 	switch typ {
 	case "ping":
-		err = s.st.AddPingCheck(host, id, dependsOn, mqttNotify)
+		err = s.st.AddPingCheck(host, id, dependsOn, mqttNotify, pushoverNotify, telegramNotify)
 	case "http":
-		err = s.st.AddHTTPCheck(host, url, expect, id, dependsOn, mqttNotify)
+		err = s.st.AddHTTPCheck(host, url, expect, id, dependsOn, mqttNotify, pushoverNotify, telegramNotify)
 	case "tcp":
-		err = s.st.AddTCPCheck(host, port, id, dependsOn, mqttNotify)
+		err = s.st.AddTCPCheck(host, port, id, dependsOn, mqttNotify, pushoverNotify, telegramNotify)
 	default:
 		err = fmt.Errorf("unknown type")
 	}
@@ -488,6 +516,8 @@ func (s *Server) handleEditSaveChecks(w http.ResponseWriter, r *http.Request) {
 		id := r.FormValue(fmt.Sprintf("id_%d", i))
 		dependsOn := r.FormValue(fmt.Sprintf("depends_on_%d", i))
 		mqttNotify := r.FormValue(fmt.Sprintf("mqtt_notify_%d", i)) == "true"
+		pushoverNotify := r.FormValue(fmt.Sprintf("pushover_notify_%d", i)) == "true"
+		telegramNotify := r.FormValue(fmt.Sprintf("telegram_notify_%d", i)) == "true"
 
 		if typ == "http" {
 			url := r.FormValue(fmt.Sprintf("url_%d", i))
@@ -498,7 +528,7 @@ func (s *Server) handleEditSaveChecks(w http.ResponseWriter, r *http.Request) {
 					expect = v
 				}
 			}
-			_ = s.st.UpdateHTTPCheck(host, i, url, expect, id, dependsOn, mqttNotify)
+			_ = s.st.UpdateHTTPCheck(host, i, url, expect, id, dependsOn, mqttNotify, pushoverNotify, telegramNotify)
 		} else if typ == "tcp" {
 			portStr := r.FormValue(fmt.Sprintf("port_%d", i))
 			port := 0
@@ -507,10 +537,10 @@ func (s *Server) handleEditSaveChecks(w http.ResponseWriter, r *http.Request) {
 					port = v
 				}
 			}
-			_ = s.st.UpdateTCPCheck(host, i, port, id, dependsOn, mqttNotify)
+			_ = s.st.UpdateTCPCheck(host, i, port, id, dependsOn, mqttNotify, pushoverNotify, telegramNotify)
 		} else {
 			// For ping checks, just update the dependencies
-			_ = s.st.UpdateCheckDependencies(host, i, id, dependsOn, mqttNotify)
+			_ = s.st.UpdateCheckDependencies(host, i, id, dependsOn, mqttNotify, pushoverNotify, telegramNotify)
 		}
 	}
 	hs, _ := s.st.GetHost(host)
@@ -530,13 +560,15 @@ func (s *Server) handleEditUpdateCheck(w http.ResponseWriter, r *http.Request) {
 	id := r.FormValue("id")
 	dependsOn := r.FormValue("depends_on")
 	mqttNotify := r.FormValue("mqtt_notify") == "true"
+	pushoverNotify := r.FormValue("pushover_notify") == "true"
+	telegramNotify := r.FormValue("telegram_notify") == "true"
 	expect := 200
 	if expectStr != "" {
 		if v, err := strconv.Atoi(expectStr); err == nil {
 			expect = v
 		}
 	}
-	if err := s.st.UpdateHTTPCheck(host, idx, url, expect, id, dependsOn, mqttNotify); err != nil {
+	if err := s.st.UpdateHTTPCheck(host, idx, url, expect, id, dependsOn, mqttNotify, pushoverNotify, telegramNotify); err != nil {
 		w.WriteHeader(409)
 		_, _ = w.Write([]byte(err.Error()))
 		return
@@ -1120,12 +1152,22 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 	mqttSettings := s.st.GetMQTTSettings()
+	pushoverSettings := s.st.GetPushoverSettings()
+	telegramSettings := s.st.GetTelegramSettings()
 	data := struct {
-		MQTT          config.MQTTSettings
-		MQTTConnected bool
+		MQTT            config.MQTTSettings
+		MQTTConnected   bool
+		Pushover        config.PushoverSettings
+		PushoverEnabled bool
+		Telegram        config.TelegramSettings
+		TelegramEnabled bool
 	}{
-		MQTT:          mqttSettings,
-		MQTTConnected: s.st.IsMQTTConnected(),
+		MQTT:            mqttSettings,
+		MQTTConnected:   s.st.IsMQTTConnected(),
+		Pushover:        pushoverSettings,
+		PushoverEnabled: s.st.IsPushoverEnabled(),
+		Telegram:        telegramSettings,
+		TelegramEnabled: s.st.IsTelegramEnabled(),
 	}
 	_ = s.tpl.ExecuteTemplate(w, "settings.html", data)
 }
@@ -1160,4 +1202,209 @@ func (s *Server) handleSettingsMQTT(w http.ResponseWriter, r *http.Request) {
 
 	// Return success message
 	_, _ = w.Write([]byte(`<div class="alert alert-success">MQTT settings saved successfully. <a href="/settings" style="color: inherit; text-decoration: underline;">Refresh</a> to see connection status.</div>`))
+}
+
+func (s *Server) handleSettingsPushover(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(405)
+		return
+	}
+
+	enabled := r.FormValue("pushover_enabled") == "true"
+	apiToken := r.FormValue("pushover_api_token")
+	userKey := r.FormValue("pushover_user_key")
+	device := r.FormValue("pushover_device")
+	sound := r.FormValue("pushover_sound")
+
+	settings := config.PushoverSettings{
+		Enabled:  enabled,
+		APIToken: apiToken,
+		UserKey:  userKey,
+		Device:   device,
+		Sound:    sound,
+	}
+
+	if err := s.st.UpdatePushoverSettings(settings); err != nil {
+		w.WriteHeader(500)
+		_, _ = w.Write([]byte(fmt.Sprintf(`<div class="alert alert-error">Error saving settings: %s</div>`, err.Error())))
+		return
+	}
+
+	// Return success message
+	_, _ = w.Write([]byte(`<div class="alert alert-success">Pushover settings saved successfully.</div>`))
+}
+
+func (s *Server) handleTestPushover(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(405)
+		return
+	}
+
+	// Get values from form (so user can test before saving)
+	apiToken := r.FormValue("pushover_api_token")
+	userKey := r.FormValue("pushover_user_key")
+
+	// Fall back to saved settings if form is empty
+	if apiToken == "" || userKey == "" {
+		settings := s.st.GetPushoverSettings()
+		if apiToken == "" {
+			apiToken = settings.APIToken
+		}
+		if userKey == "" {
+			userKey = settings.UserKey
+		}
+	}
+
+	if apiToken == "" || userKey == "" {
+		w.WriteHeader(400)
+		_, _ = w.Write([]byte(`<div class="alert alert-error">Please enter API Token and User Key first.</div>`))
+		return
+	}
+
+	// Create a temporary test with the provided credentials
+	if err := testPushoverWithSettings(apiToken, userKey); err != nil {
+		w.WriteHeader(500)
+		_, _ = w.Write([]byte(fmt.Sprintf(`<div class="alert alert-error">Test failed: %s</div>`, err.Error())))
+		return
+	}
+
+	_, _ = w.Write([]byte(`<div class="alert alert-success">Test notification sent! Check your device.</div>`))
+}
+
+func (s *Server) handleSettingsTelegram(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(405)
+		return
+	}
+
+	enabled := r.FormValue("telegram_enabled") == "true"
+	botToken := r.FormValue("telegram_bot_token")
+	chatID := r.FormValue("telegram_chat_id")
+	disablePreview := r.FormValue("telegram_disable_preview") == "true"
+	silent := r.FormValue("telegram_silent") == "true"
+
+	settings := config.TelegramSettings{
+		Enabled:        enabled,
+		BotToken:       botToken,
+		ChatID:         chatID,
+		DisablePreview: disablePreview,
+		Silent:         silent,
+	}
+
+	if err := s.st.UpdateTelegramSettings(settings); err != nil {
+		w.WriteHeader(500)
+		_, _ = w.Write([]byte(fmt.Sprintf(`<div class="alert alert-error">Error saving settings: %s</div>`, err.Error())))
+		return
+	}
+
+	// Return success message
+	_, _ = w.Write([]byte(`<div class="alert alert-success">Telegram settings saved successfully.</div>`))
+}
+
+func (s *Server) handleTestTelegram(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(405)
+		return
+	}
+
+	// Get values from form (so user can test before saving)
+	botToken := r.FormValue("telegram_bot_token")
+	chatID := r.FormValue("telegram_chat_id")
+
+	// Fall back to saved settings if form is empty
+	if botToken == "" || chatID == "" {
+		settings := s.st.GetTelegramSettings()
+		if botToken == "" {
+			botToken = settings.BotToken
+		}
+		if chatID == "" {
+			chatID = settings.ChatID
+		}
+	}
+
+	if botToken == "" || chatID == "" {
+		w.WriteHeader(400)
+		_, _ = w.Write([]byte(`<div class="alert alert-error">Please enter Bot Token and Chat ID first.</div>`))
+		return
+	}
+
+	// Create a temporary client with the provided credentials
+	tempSettings := config.TelegramSettings{
+		Enabled:  true,
+		BotToken: botToken,
+		ChatID:   chatID,
+	}
+
+	if err := testTelegramWithSettings(tempSettings); err != nil {
+		w.WriteHeader(500)
+		_, _ = w.Write([]byte(fmt.Sprintf(`<div class="alert alert-error">Test failed: %s</div>`, err.Error())))
+		return
+	}
+
+	_, _ = w.Write([]byte(`<div class="alert alert-success">Test notification sent! Check your Telegram.</div>`))
+}
+
+// testTelegramWithSettings sends a test notification using the provided settings
+func testTelegramWithSettings(settings config.TelegramSettings) error {
+	// Use simple text without MarkdownV2 escaping for test message
+	text := "✅ POKE443 Test Notification\n\nThis is a test notification from POKE443. If you see this, Telegram is configured correctly!"
+
+	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", settings.BotToken)
+
+	log.Printf("Telegram test: sending to chat_id=%s", settings.ChatID)
+
+	// Use url.Values for proper encoding
+	data := make(map[string][]string)
+	data["chat_id"] = []string{settings.ChatID}
+	data["text"] = []string{text}
+
+	resp, err := http.PostForm(apiURL, data)
+	if err != nil {
+		return fmt.Errorf("telegram request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read the full response body for debugging
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	log.Printf("Telegram API response: status=%d body=%s", resp.StatusCode, string(bodyBytes))
+
+	if resp.StatusCode != http.StatusOK {
+		var result struct {
+			OK          bool   `json:"ok"`
+			Description string `json:"description"`
+		}
+		if err := json.Unmarshal(bodyBytes, &result); err == nil && result.Description != "" {
+			return fmt.Errorf("telegram error: %s", result.Description)
+		}
+		return fmt.Errorf("telegram returned status %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// testPushoverWithSettings sends a test notification using the provided credentials
+func testPushoverWithSettings(apiToken, userKey string) error {
+	data := fmt.Sprintf("token=%s&user=%s&title=%s&message=%s&priority=0&sound=pushover",
+		apiToken, userKey,
+		"POKE443+Test+Notification",
+		"This+is+a+test+notification+from+POKE443.+If+you+see+this,+Pushover+is+configured+correctly!")
+
+	req, err := http.NewRequest("POST", "https://api.pushover.net/1/messages.json", strings.NewReader(data))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("pushover request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("pushover returned status %d", resp.StatusCode)
+	}
+
+	return nil
 }

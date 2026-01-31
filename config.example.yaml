@@ -12,7 +12,9 @@ hosts:
     checks:
       - type: ping
         enabled: true
-        mqtt_notify: true  # Send MQTT notification when state changes
+        mqtt_notify: true      # Send MQTT notification when state changes
+        pushover_notify: true  # Send Pushover notification when state changes
+        telegram_notify: true  # Send Telegram notification when state changes
     # Optional: Healthchecks.io ping URL (https://hc-ping.com/<uuid>)
     # On success we GET <url>, on failure we GET <url>/fail
     healthchecks_ping_url: "https://hc-ping.com/00000000-0000-0000-0000-000000000000"
@@ -28,7 +30,9 @@ hosts:
         expect: 200
         enabled: true
         depends_on: "internet"  # If internet check is down, this won't alert
-        mqtt_notify: true  # Send MQTT notification when state changes
+        mqtt_notify: true       # Send MQTT notification when state changes
+        pushover_notify: true   # Send Pushover notification when state changes
+        telegram_notify: false  # Telegram notifications disabled for this check
       - type: tcp
         port: 443  # Check if HTTPS port is open
         enabled: true
@@ -44,3 +48,23 @@ settings:
     username: ""
     password: ""
     topic: "healthchecker"  # Messages published to: <topic>/state-change
+
+  # Pushover Settings (optional)
+  # Configure Pushover to receive push notifications on your phone
+  # Get your API token and user key from https://pushover.net
+  pushover:
+    enabled: false
+    api_token: ""     # Your application's API token
+    user_key: ""      # Your user key or group key
+    device: ""        # Optional: specific device to send to
+    sound: ""         # Optional: notification sound (pushover, bike, bugle, siren, etc.)
+
+  # Telegram Settings (optional)
+  # Configure Telegram bot to receive notifications
+  # Create a bot with @BotFather to get your bot token
+  telegram:
+    enabled: false
+    bot_token: ""        # Bot token from @BotFather (format: 123456789:ABC...)
+    chat_id: ""          # Chat/group/channel ID (use @userinfobot to find yours)
+    disable_preview: false  # Disable link previews in messages
+    silent: false        # Send without notification sound

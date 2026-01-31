@@ -544,6 +544,8 @@
                 <td>
                   {{ if eq .Type "http" }}
                   <span class="check-type-badge check-type-http">HTTP</span>
+                  {{ else if eq .Type "tcp" }}
+                  <span class="check-type-badge check-type-tcp">TCP</span>
                   {{ else }}
                   <span class="check-type-badge check-type-ping">PING</span>
                   {{ end }}
